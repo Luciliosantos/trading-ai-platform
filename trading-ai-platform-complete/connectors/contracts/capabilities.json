@@ -1,0 +1,11 @@
+{
+  "balance": true,
+  "ticker": true,
+  "orderbook": true,
+  "positions": true,
+  "place_order": true,
+  "cancel_order": true,
+  "close_position": true,
+  "copy_trading": false,
+  "news": false
+}
