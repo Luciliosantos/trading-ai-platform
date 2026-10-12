@@ -1,419 +1,966 @@
-async function get(path, opts={}) {
- const headers = {...(opts.headers || {})};
- const token = localStorage.getItem('trading_auth_token');
- if (token) headers.Authorization = 'Bearer ' + token;
- const r = await fetch(path, {...opts, headers});
- const data = await r.json();
- if (!r.ok) throw new Error(data.error || data.message || 'Erro HTTP ' + r.status);
- return data;
+'use strict';
+
+/* =========================================================
+   TRADING AI PLATFORM
+   Frontend principal
+   Modo DEMO/PAPER — sem ordens reais
+   ========================================================= */
+
+const API = '/api';
+const TOKEN_KEY = 'trading_auth_token';
+
+let authMode = 'login';
+let marketTimer = null;
+let analysisTimer = null;
+let signalTimer = null;
+let dashboardLoading = false;
+let marketLoading = false;
+let analysisLoading = false;
+let signalLoading = false;
+let backtestLoading = false;
+
+/* =========================================================
+   UTILITÁRIOS
+   ========================================================= */
+
+function byId(id) {
+  return document.getElementById(id);
 }
-async function load(){
- const d=await get('/api/dashboard'); document.getElementById('mode').textContent=d.mode.toUpperCase();
- document.getElementById('stats').textContent=`Estratégias: ${d.stats.strategies}\nPosições: ${d.stats.active_positions}\nResultado da simulação: ${d.stats.paper_pnl}`;
- const risk=await get('/api/risk'); document.getElementById('risk').textContent=`Máx. ordem: ${risk.max_order_value}\nPerda diária: ${risk.max_daily_loss}\nPosições: ${risk.max_open_positions}`;
- const s=await get('/api/subscription'); document.getElementById('subscription').textContent=`Plano: ${s.plan}\nStatus: ${s.status}`;
- loadStrategies();
+
+function setText(id, value) {
+  const el = byId(id);
+  if (el) el.textContent = value == null ? '—' : String(value);
 }
-async function loadStrategies(){const s=await get('/api/strategies');document.getElementById('strategies').textContent=JSON.stringify(s,null,2)}
-async function simulate(){
-  const el = document.getElementById('result');
-  el.textContent = 'Processando simulação...';
+
+function formatNumber(value, digits = 2) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return '—';
+
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: digits
+  });
+}
+
+function formatMoney(value, currency = 'USDT') {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return '—';
+
+  return formatNumber(number, 2) + ' ' + currency;
+}
+
+function formatPercent(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return '—';
+
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4
+  }) + '%';
+}
+
+function formatDate(value) {
+  if (value == null || value === '') return '—';
+
+  let date;
+
+  if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+    const number = Number(value);
+    date = new Date(number < 1000000000000 ? number * 1000 : number);
+  } else {
+    date = new Date(value);
+  }
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return date.toLocaleString('pt-BR');
+}
+
+function errorMessage(error) {
+  return error && error.message
+    ? error.message
+    : 'Ocorreu um erro inesperado.';
+}
+
+function escapeHTML(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[char]);
+}
+
+function showMessage(id, message) {
+  setText(id, message);
+}
+
+/* =========================================================
+   REQUISIÇÕES HTTP E AUTENTICAÇÃO
+   ========================================================= */
+
+async function get(path, opts = {}) {
+  const headers = new Headers(opts.headers || {});
+  const token = localStorage.getItem(TOKEN_KEY);
+
+  if (token) {
+    headers.set('Authorization', 'Bearer ' + token);
+  }
+
+  if (
+    opts.body &&
+    typeof opts.body === 'string' &&
+    !headers.has('Content-Type')
+  ) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(path, {
+    ...opts,
+    headers,
+    cache: 'no-store'
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  let data;
+
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    data = text ? { message: text } : {};
+  }
+
+  if (response.status === 401 && !path.startsWith(API + '/auth/')) {
+    localStorage.removeItem(TOKEN_KEY);
+
+    const authScreen = byId('auth-screen');
+
+    if (authScreen) authScreen.hidden = false;
+
+    const accountBar = byId('account-bar');
+
+    if (accountBar) accountBar.hidden = true;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+      data.message ||
+      'Erro HTTP ' + response.status
+    );
+  }
+
+  return data;
+}
+
+/* =========================================================
+   CARREGAMENTO DO PAINEL
+   ========================================================= */
+
+async function load() {
+  if (dashboardLoading) return;
+
+  dashboardLoading = true;
 
   try {
-    const r = await get('/api/simulate/order', {
+    await Promise.allSettled([
+      loadDashboardStats(),
+      loadRisk(),
+      loadSubscription(),
+      loadStrategies()
+    ]);
+  } finally {
+    dashboardLoading = false;
+  }
+}
+
+async function loadDashboardStats() {
+  try {
+    const data = await get(API + '/dashboard');
+
+    if (data.mode != null) {
+      setText('mode', String(data.mode).toUpperCase());
+    }
+
+    const stats = data.stats || {};
+
+    setText(
+      'stats',
+      'Estratégias: ' + (stats.strategies ?? 0) +
+      '\nPosições: ' + (stats.active_positions ?? 0) +
+      '\nResultado da simulação: ' + (stats.paper_pnl ?? 0)
+    );
+  } catch (error) {
+    setText('stats', 'Não foi possível carregar o painel: ' + errorMessage(error));
+  }
+}
+
+async function loadRisk() {
+  try {
+    const risk = await get(API + '/risk');
+
+    setText(
+      'risk',
+      'Máx. ordem: ' + (risk.max_order_value ?? '—') +
+      '\nPerda diária: ' + (risk.max_daily_loss ?? '—') +
+      '\nPosições: ' + (risk.max_open_positions ?? '—')
+    );
+  } catch (error) {
+    setText('risk', 'Erro ao carregar risco: ' + errorMessage(error));
+  }
+}
+
+async function loadSubscription() {
+  try {
+    const subscription = await get(API + '/subscription');
+
+    setText(
+      'subscription',
+      'Plano: ' + (subscription.plan ?? '—') +
+      '\nStatus: ' + (subscription.status ?? '—')
+    );
+  } catch (error) {
+    setText(
+      'subscription',
+      'Erro ao consultar assinatura: ' + errorMessage(error)
+    );
+  }
+}
+
+async function loadStrategies() {
+  const element = byId('strategies');
+
+  if (element) element.textContent = 'Carregando estratégias...';
+
+  try {
+    const data = await get(API + '/strategies');
+
+    if (element) {
+      element.textContent = JSON.stringify(data, null, 2);
+    }
+  } catch (error) {
+    if (element) {
+      element.textContent =
+        'Erro ao carregar estratégias: ' + errorMessage(error);
+    }
+  }
+}
+
+/* =========================================================
+   COTAÇÃO BYBIT
+   ========================================================= */
+
+async function loadMarket() {
+  if (marketLoading) return;
+
+  marketLoading = true;
+
+  const status = byId('market-status');
+
+  if (status) status.textContent = 'Consultando a Bybit...';
+
+  try {
+    const data = await get(
+      API + '/market/ticker?symbol=BTCUSDT'
+    );
+
+    if (
+      data.status !== 'ok' ||
+      !Number.isFinite(Number(data.last_price)) ||
+      Number(data.last_price) <= 0
+    ) {
+      throw new Error(
+        data.message || 'A Bybit não retornou uma cotação válida.'
+      );
+    }
+
+    setText('market-symbol', data.symbol || 'BTCUSDT');
+    setText('market-price', formatMoney(data.last_price));
+    setText(
+      'market-spread',
+      formatNumber(data.bid, 8) + ' / ' + formatNumber(data.ask, 8)
+    );
+
+    const change = Number(data.change_24h_percent);
+
+    setText(
+      'market-change',
+      Number.isFinite(change)
+        ? formatPercent(change * 100)
+        : '—'
+    );
+
+    if (status) {
+      status.textContent =
+        'Cotação atualizada às ' +
+        new Date().toLocaleTimeString('pt-BR');
+    }
+  } catch (error) {
+    if (status) {
+      status.textContent = 'Erro na cotação: ' + errorMessage(error);
+    }
+  } finally {
+    marketLoading = false;
+  }
+}
+
+/* =========================================================
+   ANÁLISE TÉCNICA
+   ========================================================= */
+
+async function loadAnalysis() {
+  if (analysisLoading) return;
+
+  analysisLoading = true;
+
+  const reason = byId('analysis-reason');
+
+  if (reason) {
+    reason.textContent = 'Calculando indicadores com dados da Bybit...';
+  }
+
+  try {
+    const data = await get(
+      API + '/market/analysis?symbol=BTCUSDT'
+    );
+
+    if (
+      data.status !== 'ok' ||
+      !data.market ||
+      data.market.status !== 'ok'
+    ) {
+      throw new Error(
+        data.market?.reason ||
+        data.message ||
+        'Não foi possível analisar o mercado.'
+      );
+    }
+
+    const market = data.market;
+
+    const trends = {
+      bullish: 'Alta',
+      bearish: 'Baixa',
+      sideways: 'Lateral',
+      neutral: 'Lateral'
+    };
+
+    setText(
+      'analysis-trend',
+      trends[market.trend] || market.trend || 'Lateral'
+    );
+
+    setText('analysis-ema9', formatNumber(market.ema9, 8));
+    setText('analysis-ema21', formatNumber(market.ema21, 8));
+    setText('analysis-rsi', formatNumber(market.rsi14, 4));
+
+    setText(
+      'analysis-bb-upper',
+      formatNumber(market.bollinger_upper, 8)
+    );
+
+    setText(
+      'analysis-bb-middle',
+      formatNumber(market.bollinger_middle, 8)
+    );
+
+    setText(
+      'analysis-bb-lower',
+      formatNumber(market.bollinger_lower, 8)
+    );
+
+    setText(
+      'analysis-bb-width',
+      formatPercent(market.bollinger_width_percent)
+    );
+
+    setText('analysis-signal', market.signal || 'Sem sinal');
+
+    if (reason) {
+      reason.textContent =
+        (market.reason || 'Análise concluída.') +
+        ' | Candles: ' + (data.candles_count ?? '—') +
+        ' | Atualizado: ' +
+        new Date().toLocaleTimeString('pt-BR');
+    }
+  } catch (error) {
+    if (reason) {
+      reason.textContent = 'Erro na análise: ' + errorMessage(error);
+    }
+  } finally {
+    analysisLoading = false;
+  }
+}
+
+/* =========================================================
+   HISTÓRICO DE SINAIS
+   ========================================================= */
+
+async function loadSignalHistory() {
+  const tbody = byId('signal-history');
+
+  if (!tbody || signalLoading) return;
+
+  signalLoading = true;
+  tbody.textContent = '';
+
+  const loadingRow = document.createElement('tr');
+  const loadingCell = document.createElement('td');
+
+  loadingCell.colSpan = 6;
+  loadingCell.textContent = 'Consultando histórico...';
+  loadingRow.appendChild(loadingCell);
+  tbody.appendChild(loadingRow);
+
+  try {
+    const data = await get(
+      API + '/market/signals?symbol=BTCUSDT&limit=20'
+    );
+
+    if (data.status !== 'ok') {
+      throw new Error(data.message || 'Falha ao consultar histórico.');
+    }
+
+    if (!Array.isArray(data.signals) || data.signals.length === 0) {
+      tbody.textContent = '';
+
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+
+      cell.colSpan = 6;
+      cell.textContent = 'Nenhum sinal registrado ainda.';
+
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
+
+    tbody.textContent = '';
+
+    for (const signal of data.signals) {
+      const row = document.createElement('tr');
+
+      const trend =
+        signal.trend === 'bullish' ? 'Alta' :
+        signal.trend === 'bearish' ? 'Baixa' :
+        'Lateral';
+
+      const values = [
+        formatDate(signal.candle_time || signal.created_at),
+        signal.symbol || '—',
+        formatNumber(signal.price, 8),
+        trend,
+        signal.rsi14 == null ? '—' : formatNumber(signal.rsi14, 4),
+        signal.signal || '—'
+      ];
+
+      for (const value of values) {
+        const cell = document.createElement('td');
+        cell.textContent = String(value);
+        row.appendChild(cell);
+      }
+
+      tbody.appendChild(row);
+    }
+  } catch (error) {
+    tbody.textContent = '';
+
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+
+    cell.colSpan = 6;
+    cell.textContent = 'Erro ao consultar histórico: ' + errorMessage(error);
+
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  } finally {
+    signalLoading = false;
+  }
+}
+
+/* =========================================================
+   SIMULAÇÃO DEMO
+   ========================================================= */
+
+async function simulate() {
+  const element = byId('result');
+
+  if (element) {
+    element.textContent = 'Consultando preço atual da Bybit...';
+  }
+
+  try {
+    const market = await get(
+      API + '/market/ticker?symbol=BTCUSDT'
+    );
+
+    const price = Number(market.last_price);
+
+    if (
+      market.status !== 'ok' ||
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      throw new Error('Não foi possível obter um preço válido.');
+    }
+
+    if (element) {
+      element.textContent = 'Processando simulação DEMO...';
+    }
+
+    const data = await get(API + '/simulate/order', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         symbol: 'BTCUSDT',
         side: 'BUY',
         quantity: 0.001,
-        price: 50000
+        price
       })
     });
 
-    if (r.status !== 'simulated') {
-      el.textContent = 'Simulação não concluída.\n\n' +
-        (r.message || r.reason || JSON.stringify(r, null, 2));
-      return;
-    }
-
-    el.textContent =
-      'SIMULAÇÃO CONCLUÍDA\n\n' +
-      'Modo: DEMO (sem dinheiro real)\n' +
-      'Ativo: ' + r.order.symbol + '\n' +
-      'Operação: ' + r.order.side + '\n' +
-      'Quantidade: ' + r.order.quantity + '\n' +
-      'Preço informado: ' + r.order.price + '\n' +
-      'Identificador: ' + r.id + '\n\n' +
-      (r.message || 'Nenhuma ordem real foi enviada.');
-  } catch (e) {
-    el.textContent = 'Erro ao simular: ' + e.message;
-  }
-}
-async function killSwitch(){const d=await get('/api/kill-switch',{method:'POST'});document.getElementById('result').textContent=JSON.stringify(d,null,2)}
-
-// Mantém a sessão autenticada nas chamadas à API.
-(() => {
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
-    const url = typeof input === 'string' ? input : input.url;
-    if (url.startsWith('/api/') && !url.startsWith('/api/auth/login')
-        && !url.startsWith('/api/auth/register')) {
-      const headers = new Headers(
-        init.headers || (input instanceof Request ? input.headers : undefined)
+    if (data.status !== 'simulated') {
+      throw new Error(
+        data.message ||
+        data.reason ||
+        'O backend não confirmou a simulação.'
       );
-      const token = localStorage.getItem('trading_auth_token');
-      if (token) headers.set('Authorization', 'Bearer ' + token);
-      init = {...init, headers};
     }
-    return originalFetch(input, init);
-  };
-})();
 
-initAuth();
+    const order = data.order || {};
 
-async function loadMarket() {
-  const status = document.getElementById('market-status');
-  status.textContent = 'Consultando a Bybit...';
+    if (element) {
+      element.textContent =
+        'SIMULAÇÃO CONCLUÍDA\n\n' +
+        'Modo: DEMO/PAPER\n' +
+        'Ativo: ' + (order.symbol || 'BTCUSDT') + '\n' +
+        'Operação: ' + (order.side || 'BUY') + '\n' +
+        'Quantidade: ' + (order.quantity ?? 0.001) + '\n' +
+        'Preço utilizado: ' + formatMoney(price) + '\n' +
+        'Valor estimado: ' + formatMoney(price * 0.001) + '\n' +
+        'Identificador: ' + (data.id || 'Não informado') + '\n\n' +
+        (data.message || 'Nenhuma ordem real foi enviada.');
+    }
+
+    await loadDashboardStats();
+  } catch (error) {
+    if (element) {
+      element.textContent = 'Erro na simulação: ' + errorMessage(error);
+    }
+  }
+}
+
+/* =========================================================
+   KILL SWITCH
+   ========================================================= */
+
+async function killSwitch() {
+  const confirmed = window.confirm(
+    'Deseja acionar o kill switch? O backend receberá uma solicitação de emergência.'
+  );
+
+  if (!confirmed) return;
+
+  const element = byId('result');
+
+  if (element) {
+    element.textContent = 'Enviando solicitação de emergência...';
+  }
 
   try {
-    const d = await get('/api/market/ticker?symbol=BTCUSDT');
-
-    if (d.status !== 'ok') {
-      throw new Error(d.message || 'A Bybit não retornou a cotação.');
-    }
-
-    const money = v => Number(v).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 8
+    const data = await get(API + '/kill-switch', {
+      method: 'POST'
     });
 
-    document.getElementById('market-symbol').textContent = d.symbol;
-    document.getElementById('market-price').textContent =
-      money(d.last_price) + ' USDT';
-
-    document.getElementById('market-spread').textContent =
-      money(d.bid) + ' / ' + money(d.ask);
-
-    document.getElementById('market-change').textContent =
-      (Number(d.change_24h_percent) * 100).toFixed(2).replace('.', ',') + '%';
-
-    status.textContent = 'Cotação atualizada: ' +
-      new Date().toLocaleTimeString('pt-BR');
-  } catch (e) {
-    status.textContent = 'Erro na cotação: ' + e.message;
+    if (element) {
+      element.textContent =
+        'RESPOSTA DO KILL SWITCH\n\n' +
+        JSON.stringify(data, null, 2);
+    }
+  } catch (error) {
+    if (element) {
+      element.textContent =
+        'Não foi possível confirmar o kill switch: ' +
+        errorMessage(error);
+    }
   }
 }
 
-loadMarket();
-setInterval(loadMarket, 10000);
+/* =========================================================
+   BACKTEST HISTÓRICO
+   ========================================================= */
 
-
-async function loadAnalysis() {
-  const reason = document.getElementById('analysis-reason');
-
-  try {
-    reason.textContent = 'Calculando indicadores com candles da Bybit...';
-
-    const d = await get('/api/market/analysis?symbol=BTCUSDT');
-
-    if (d.status !== 'ok' || !d.market || d.market.status !== 'ok') {
-      throw new Error(d.market?.reason || d.message || 'Não foi possível analisar o mercado.');
-    }
-
-    const m = d.market;
-    const fmt = v => Number(v).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 8
-    });
-
-    document.getElementById('analysis-trend').textContent =
-      m.trend === 'bullish' ? 'Alta' :
-      m.trend === 'bearish' ? 'Baixa' : 'Lateral';
-
-    document.getElementById('analysis-ema9').textContent = fmt(m.ema9);
-    document.getElementById('analysis-ema21').textContent = fmt(m.ema21);
-    document.getElementById('analysis-rsi').textContent = fmt(m.rsi14);
-    document.getElementById('analysis-bb-upper').textContent = fmt(m.bollinger_upper);
-    document.getElementById('analysis-bb-middle').textContent = fmt(m.bollinger_middle);
-    document.getElementById('analysis-bb-lower').textContent = fmt(m.bollinger_lower);
-    document.getElementById('analysis-bb-width').textContent =
-      Number(m.bollinger_width_percent).toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 4
-      }) + '%';
-    document.getElementById('analysis-signal').textContent = m.signal;
-    reason.textContent = m.reason + ' | Candles: ' + d.candles_count +
-      ' | Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
-
-  } catch (e) {
-    reason.textContent = 'Erro na análise: ' + e.message;
-  }
-}
-
-loadAnalysis();
-setInterval(loadAnalysis, 60000);
-
-
-async function loadSignalHistory() {
-  const tbody = document.getElementById('signal-history');
-  if (!tbody) return;
-
-  tbody.innerHTML = '<tr><td colspan="6">Consultando histórico...</td></tr>';
-
-  try {
-    const d = await get('/api/market/signals?symbol=BTCUSDT&limit=20');
-
-    if (d.status !== 'ok') {
-      throw new Error(d.message || 'Falha ao consultar histórico.');
-    }
-
-    if (!d.signals || d.signals.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6">Nenhum sinal registrado ainda.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = d.signals.map(s => {
-      const date = new Date(s.candle_time || s.created_at).toLocaleString('pt-BR');
-      const price = Number(s.price).toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 8
-      });
-      const rsi = s.rsi14 == null ? '-' : Number(s.rsi14).toLocaleString('pt-BR');
-      const trend = s.trend === 'bullish' ? 'Alta' :
-                    s.trend === 'bearish' ? 'Baixa' : 'Lateral';
-
-      return `<tr>
-        <td>${date}</td>
-        <td>${s.symbol}</td>
-        <td>${price}</td>
-        <td>${trend}</td>
-        <td>${rsi}</td>
-        <td><b>${s.signal}</b></td>
-      </tr>`;
-    }).join('');
-  } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6">Erro: ' + e.message + '</td></tr>';
-  }
-}
-
-
-loadSignalHistory();
-setInterval(loadSignalHistory, 60000);
-
-
-// Backtest histórico: simulação apenas, sem enviar ordens reais.
 async function runBacktest() {
-  const form = document.getElementById('backtest-form');
-  const button = document.getElementById('bt-run');
-  const status = document.getElementById('backtest-status');
-  const results = document.getElementById('backtest-results');
-  if (!form || !button || !status || !results) return;
+  const form = byId('backtest-form');
+  const button = byId('bt-run');
+  const status = byId('backtest-status');
+  const results = byId('backtest-results');
 
-  const balance = Number(document.getElementById('bt-balance').value);
-  const feePercent = Number(document.getElementById('bt-fee').value);
-
-  if (!Number.isFinite(balance) || balance <= 0 ||
-      !Number.isFinite(feePercent) || feePercent < 0 || feePercent > 5) {
-    status.textContent = 'Informe saldo positivo e taxa entre 0 e 5%.';
+  if (!form || !button || !status || !results || backtestLoading) {
     return;
   }
 
+  const balance = Number(byId('bt-balance')?.value);
+  const feePercent = Number(byId('bt-fee')?.value);
+  const limit = Number(byId('bt-limit')?.value);
+
+  if (!Number.isFinite(balance) || balance <= 0) {
+    status.textContent = 'Informe um saldo inicial maior que zero.';
+    return;
+  }
+
+  if (
+    !Number.isFinite(feePercent) ||
+    feePercent < 0 ||
+    feePercent > 5
+  ) {
+    status.textContent = 'Informe uma taxa entre 0 e 5%.';
+    return;
+  }
+
+  if (![50, 100, 200].includes(limit)) {
+    status.textContent = 'Selecione uma quantidade válida de candles.';
+    return;
+  }
+
+  backtestLoading = true;
   button.disabled = true;
   results.hidden = true;
-  status.textContent = 'Buscando candles e executando o backtest...';
+  status.textContent = 'Buscando candles e executando backtest...';
 
   try {
-    const data = await get('/api/backtest', {
+    const data = await get(API + '/backtest', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        symbol: document.getElementById('bt-symbol').value,
-        timeframe: document.getElementById('bt-timeframe').value,
-        strategy: document.getElementById('bt-strategy').value,
-        limit: Number(document.getElementById('bt-limit').value),
+        symbol: byId('bt-symbol').value,
+        timeframe: byId('bt-timeframe').value,
+        strategy: byId('bt-strategy').value,
+        limit,
         initial_balance: balance,
         fee_rate: feePercent / 100
       })
     });
 
     if (!data || data.status !== 'ok') {
-      throw new Error(data?.message || data?.error || JSON.stringify(data));
+      throw new Error(
+        data?.message ||
+        data?.error ||
+        'O backtest não foi concluído.'
+      );
     }
 
-    const money = v => Number(v).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    });
-    const percent = v => Number(v).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2, maximumFractionDigits: 4
-    }) + '%';
+    setText('bt-final', formatMoney(data.final_balance));
+    setText('bt-net', formatMoney(data.net_result));
+    setText('bt-return', formatPercent(data.return_percent));
+    setText('bt-trades', data.closed_trades ?? 0);
+    setText('bt-winrate', formatPercent(data.win_rate_percent));
+    setText('bt-drawdown', formatPercent(data.max_drawdown_percent));
 
-    document.getElementById('bt-final').textContent = money(data.final_balance) + ' USDT';
-    document.getElementById('bt-net').textContent = money(data.net_result) + ' USDT';
-    document.getElementById('bt-return').textContent = percent(data.return_percent);
-    document.getElementById('bt-trades').textContent = data.closed_trades;
-    document.getElementById('bt-winrate').textContent = percent(data.win_rate_percent);
-    document.getElementById('bt-drawdown').textContent = percent(data.max_drawdown_percent);
+    const tbody = byId('bt-trade-rows');
 
-    const tbody = document.getElementById('bt-trade-rows');
-    const trades = Array.isArray(data.trades) ? data.trades : [];
-    tbody.innerHTML = trades.length ? trades.map(t => {
-      const date = ts => new Date(Number(ts)).toLocaleString('pt-BR');
-      return `<tr>
-        <td>${date(t.entry_timestamp)}</td>
-        <td>${date(t.exit_timestamp)}</td>
-        <td>${money(t.entry_price)}</td>
-        <td>${money(t.exit_price)}</td>
-        <td>${money(t.net_pnl)}</td>
-        <td>${t.result}</td>
-      </tr>`;
-    }).join('') : '<tr><td colspan="6">Nenhuma operação encerrada neste período.</td></tr>';
+    if (tbody) {
+      tbody.textContent = '';
+
+      const trades = Array.isArray(data.trades) ? data.trades : [];
+
+      if (trades.length === 0) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+
+        cell.colSpan = 6;
+        cell.textContent = 'Nenhuma operação encerrada neste período.';
+
+        row.appendChild(cell);
+        tbody.appendChild(row);
+      } else {
+        for (const trade of trades) {
+          const row = document.createElement('tr');
+
+          const values = [
+            formatDate(trade.entry_timestamp),
+            formatDate(trade.exit_timestamp),
+            formatNumber(trade.entry_price, 8),
+            formatNumber(trade.exit_price, 8),
+            formatMoney(trade.net_pnl),
+            trade.result || '—'
+          ];
+
+          for (const value of values) {
+            const cell = document.createElement('td');
+            cell.textContent = String(value);
+            row.appendChild(cell);
+          }
+
+          tbody.appendChild(row);
+        }
+      }
+    }
 
     results.hidden = false;
+
     status.textContent =
-      `Teste concluído: ${data.symbol}, timeframe ${data.timeframe}, ` +
-      `${data.candles_tested} candles. Modo de simulação; ordens reais desativadas.`;
-  } catch (e) {
-    status.textContent = 'Não foi possível executar o backtest: ' + e.message;
+      'Backtest concluído. Ativo: ' + (data.symbol || '—') +
+      ' | Intervalo: ' + (data.timeframe || '—') +
+      ' | Candles: ' + (data.candles_tested ?? '—') +
+      '. Simulação histórica, sem ordens reais.';
+  } catch (error) {
+    status.textContent =
+      'Não foi possível executar o backtest: ' + errorMessage(error);
   } finally {
     button.disabled = false;
+    backtestLoading = false;
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const form = document.getElementById('backtest-form');
-  if (form) form.addEventListener('submit', event => {
-    event.preventDefault();
-    runBacktest();
-  });
-});
-
-
-let authMode = 'login';
+/* =========================================================
+   LOGIN E CADASTRO
+   ========================================================= */
 
 function toggleAuthMode() {
   authMode = authMode === 'login' ? 'register' : 'login';
-  document.getElementById('auth-name').hidden = authMode !== 'register';
-  document.getElementById('auth-name').required = authMode === 'register';
-  document.getElementById('auth-password').autocomplete =
-    authMode === 'login' ? 'current-password' : 'new-password';
-  document.getElementById('auth-subtitle').textContent =
-    authMode === 'login' ? 'Entre para acessar sua conta.' :
-    'Crie sua conta para começar.';
-  document.getElementById('auth-submit').textContent =
-    authMode === 'login' ? 'Entrar' : 'Criar conta';
-  document.getElementById('auth-toggle').textContent =
-    authMode === 'login' ? 'Ainda não tenho conta' : 'Já tenho conta';
-  document.getElementById('auth-message').textContent = '';
-}
 
-async function initAuth() {
-  const token = localStorage.getItem('trading_auth_token');
-  if (token) {
-    try {
-      const data = await get('/api/auth/me');
-      if (data.status === 'ok' && data.user) {
-        showAuthenticatedUser(data.user);
-        load();
-        return;
-      }
-    } catch (e) {
-      localStorage.removeItem('trading_auth_token');
-    }
+  const name = byId('auth-name');
+  const password = byId('auth-password');
+
+  if (name) {
+    name.hidden = authMode !== 'register';
+    name.required = authMode === 'register';
   }
-  document.getElementById('auth-screen').hidden = false;
-  document.getElementById('account-bar').hidden = true;
+
+  if (password) {
+    password.autocomplete =
+      authMode === 'login' ? 'current-password' : 'new-password';
+  }
+
+  setText(
+    'auth-subtitle',
+    authMode === 'login'
+      ? 'Entre para acessar sua conta.'
+      : 'Crie sua conta para começar.'
+  );
+
+  setText(
+    'auth-submit',
+    authMode === 'login' ? 'Entrar' : 'Criar conta'
+  );
+
+  setText(
+    'auth-toggle',
+    authMode === 'login' ? 'Ainda não tenho conta' : 'Já tenho conta'
+  );
+
+  setText('auth-message', '');
 }
 
 function showAuthenticatedUser(user) {
-  document.getElementById('auth-screen').hidden = true;
-  document.getElementById('account-bar').hidden = false;
-  document.getElementById('account-name').textContent =
-    'Conta: ' + (user.name || user.email || 'Cliente');
+  const screen = byId('auth-screen');
+  const bar = byId('account-bar');
+
+  if (screen) screen.hidden = true;
+  if (bar) bar.hidden = false;
+
+  setText(
+    'account-name',
+    'Conta: ' + (user.name || user.email || 'Cliente')
+  );
 }
 
-document.getElementById('auth-form').addEventListener('submit', async function(e) {
-  e.preventDefault();
-  const message = document.getElementById('auth-message');
-  const button = document.getElementById('auth-submit');
+async function initAuth() {
+  const token = localStorage.getItem(TOKEN_KEY);
+
+  if (token) {
+    try {
+      const data = await get(API + '/auth/me');
+
+      if (data.status === 'ok' && data.user) {
+        showAuthenticatedUser(data.user);
+        await load();
+        return;
+      }
+    } catch (error) {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  }
+
+  if (byId('auth-screen')) byId('auth-screen').hidden = false;
+  if (byId('account-bar')) byId('account-bar').hidden = true;
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+
+  const message = byId('auth-message');
+  const button = byId('auth-submit');
+
+  if (!message || !button) return;
+
   button.disabled = true;
   message.textContent = 'Processando...';
 
   try {
-    const email = document.getElementById('auth-email').value.trim();
-    const password = document.getElementById('auth-password').value;
+    const email = byId('auth-email').value.trim();
+    const password = byId('auth-password').value;
+
     let data;
 
     if (authMode === 'register') {
-      const name = document.getElementById('auth-name').value.trim();
-      data = await get('/api/auth/register', {
+      const name = byId('auth-name').value.trim();
+
+      data = await get(API + '/auth/register', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name, email, password})
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
       });
 
       if (data.status !== 'ok') {
-        throw new Error(data.error || 'Não foi possível criar a conta.');
+        throw new Error(
+          data.error || data.message || 'Não foi possível criar a conta.'
+        );
       }
 
-      document.getElementById('auth-screen').hidden = true;
-      document.getElementById('register-success').hidden = false;
-      document.getElementById('register-success').style.display = 'flex';
+      const modal = byId('register-success');
+
+      if (modal) {
+        modal.hidden = false;
+        modal.style.display = 'flex';
+      }
+
       message.textContent = '';
-      document.getElementById('auth-email').value = email;
-      document.getElementById('register-success-enter').onclick = function() {
-        const modal = document.getElementById('register-success');
-        modal.hidden = true;
-        modal.style.display = 'none';
 
-        const screen = document.getElementById('auth-screen');
-        screen.hidden = false;
-        screen.style.display = 'block';
+      const enterButton = byId('register-success-enter');
 
-        authMode = 'login';
-        document.getElementById('auth-subtitle').textContent =
-          'Entre para acessar sua conta.';
-        document.getElementById('auth-name').hidden = true;
-        document.getElementById('auth-name').required = false;
-        document.getElementById('auth-password').autocomplete = 'current-password';
-        document.getElementById('auth-submit').textContent = 'Entrar';
-        document.getElementById('auth-toggle').hidden = false;
-        document.getElementById('auth-toggle').textContent = 'Criar uma conta';
-        document.getElementById('auth-email').value = email;
-        document.getElementById('auth-password').value = '';
-        document.getElementById('auth-message').textContent =
-          'Conta criada! Digite sua senha para entrar.';
-      };
+      if (enterButton) {
+        enterButton.onclick = () => {
+          if (modal) {
+            modal.hidden = true;
+            modal.style.display = 'none';
+          }
+
+          const screen = byId('auth-screen');
+
+          if (screen) {
+            screen.hidden = false;
+            screen.style.display = '';
+          }
+
+          authMode = 'login';
+
+          if (byId('auth-name')) {
+            byId('auth-name').hidden = true;
+            byId('auth-name').required = false;
+          }
+
+          if (byId('auth-password')) {
+            byId('auth-password').value = '';
+            byId('auth-password').autocomplete = 'current-password';
+          }
+
+          setText('auth-subtitle', 'Entre para acessar sua conta.');
+          setText('auth-submit', 'Entrar');
+          setText('auth-toggle', 'Criar uma conta');
+
+          if (byId('auth-toggle')) {
+            byId('auth-toggle').hidden = false;
+          }
+
+          if (byId('auth-email')) {
+            byId('auth-email').value = email;
+          }
+
+          setText(
+            'auth-message',
+            'Conta criada! Digite sua senha para entrar.'
+          );
+        };
+      }
+
       return;
     }
 
-    data = await get('/api/auth/login', {
+    data = await get(API + '/auth/login', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
     });
 
     if (data.status !== 'ok' || !data.token) {
-      throw new Error(data.error || 'Login não concluído.');
+      throw new Error(
+        data.error || data.message || 'Login não concluído.'
+      );
     }
 
-    localStorage.setItem('trading_auth_token', data.token);
+    localStorage.setItem(TOKEN_KEY, data.token);
+
     showAuthenticatedUser(data.user || {});
-    load();
-  } catch (err) {
-    message.textContent = err.message || 'Não foi possível concluir a operação.';
+    message.textContent = '';
+
+    await load();
+  } catch (error) {
+    message.textContent = errorMessage(error);
   } finally {
     button.disabled = false;
   }
-});
+}
 
 async function logoutAccount() {
   try {
-    await get('/api/auth/logout', {method: 'POST'});
-  } catch (e) {}
-  localStorage.removeItem('trading_auth_token');
-  document.getElementById('account-bar').hidden = true;
-  document.getElementById('auth-screen').hidden = false;
-  document.getElementById('auth-password').value = '';
-  document.getElementById('auth-message').textContent = 'Sessão encerrada.';
+    await get(API + '/auth/logout', { method: 'POST' });
+  } catch (error) {
+    // O logout local continua mesmo se o backend não tiver essa rota.
+  }
+
+  localStorage.removeItem(TOKEN_KEY);
+
+  if (byId('account-bar')) byId('account-bar').hidden = true;
+
+  if (byId('auth-screen')) {
+    byId('auth-screen').hidden = false;
+    byId('auth-screen').style.display = '';
+  }
+
+  if (byId('auth-password')) byId('auth-password').value = '';
+
+  setText('auth-message', 'Sessão encerrada.');
 }
+
+/* =========================================================
+   INICIALIZAÇÃO
+   ========================================================= */
+
+document.addEventListener('DOMContentLoaded', () => {
+  const authForm = byId('auth-form');
+
+  if (authForm) {
+    authForm.addEventListener('submit', handleAuthSubmit);
+  }
+
+  const backtestForm = byId('backtest-form');
+
+  if (backtestForm) {
+    backtestForm.addEventListener('submit', event => {
+      event.preventDefault();
+      runBacktest();
+    });
+  }
+
+  // Mantém as funções existentes e atualiza os dados periodicamente.
+  loadMarket();
+  loadAnalysis();
+  loadSignalHistory();
+
+  if (marketTimer) clearInterval(marketTimer);
+  if (analysisTimer) clearInterval(analysisTimer);
+  if (signalTimer) clearInterval(signalTimer);
+
+  marketTimer = setInterval(loadMarket, 10000);
+  analysisTimer = setInterval(loadAnalysis, 60000);
+  signalTimer = setInterval(loadSignalHistory, 60000);
+
+  initAuth();
+});
