@@ -1,298 +1,850 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trading AI Platform</title>
-<link rel="stylesheet" href="/app.css?v=20261012b">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080d18">
+  <meta name="description" content="Trading AI Platform — análise de mercado, estratégias e backtest.">
+  <title>Trading AI Platform</title>
 
-<style id="backtest-mobile-fix">
-#backtest-panel { width:100%; box-sizing:border-box; }
-#backtest-panel * { box-sizing:border-box; }
-#backtest-form {
-  display:flex !important;
-  flex-direction:column !important;
-  align-items:stretch !important;
-  gap:12px !important;
-  width:100% !important;
-}
-#backtest-form label {
-  display:block !important;
-  width:100% !important;
-}
-#backtest-form input,
-#backtest-form select,
-#backtest-form button {
-  display:block !important;
-  width:100% !important;
-  max-width:100% !important;
-  min-height:46px !important;
-  margin-top:5px !important;
-  font-size:16px !important;
-}
-#backtest-results { width:100%; }
-#backtest-results .bt-grid {
-  display:flex !important;
-  flex-direction:column !important;
-  gap:10px !important;
-  width:100% !important;
-}
-#backtest-results .bt-grid article {
-  display:flex !important;
-  flex-direction:column !important;
-  align-items:flex-start !important;
-  gap:8px !important;
-  width:100% !important;
-  padding:14px !important;
-  overflow-wrap:anywhere;
-}
-#backtest-results .bt-grid article span {
-  display:block !important;
-}
-#backtest-results .bt-grid article strong {
-  display:block !important;
-  font-size:20px !important;
-}
-#backtest-results > div[style*="overflow-x"] {
-  width:100% !important;
-  overflow-x:auto !important;
-}
-#backtest-results table {
-  width:100% !important;
-  min-width:600px !important;
-  border-collapse:collapse;
-}
-#backtest-results th,
-#backtest-results td {
-  padding:10px 8px !important;
-  white-space:nowrap;
-  text-align:left;
-}
-#backtest-status {
-  overflow-wrap:anywhere;
-}
-</style>
+  <link rel="stylesheet" href="/app.css?v=20261013a">
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080d18;
+      --surface: #101827;
+      --surface2: #151f30;
+      --border: #263349;
+      --text: #edf3ff;
+      --muted: #91a0b8;
+      --green: #22c982;
+      --red: #ff5d73;
+      --blue: #5794ff;
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at top left, #152544 0, transparent 40%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      transition: filter .2s, transform .2s;
+    }
+
+    button:hover {
+      filter: brightness(1.12);
+    }
+
+    button:active {
+      transform: scale(.98);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 66px;
+      padding: 12px clamp(16px, 4vw, 48px);
+      background: rgba(8, 13, 24, .94);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+    }
+
+    header b {
+      font-size: 18px;
+      letter-spacing: -.5px;
+    }
+
+    #mode {
+      padding: 6px 12px;
+      border: 1px solid #216b50;
+      border-radius: 999px;
+      background: #103628;
+      color: #61f0b1;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    main {
+      width: min(1440px, 100%);
+      margin: auto;
+      padding: 24px clamp(14px, 3vw, 36px) 50px;
+    }
+
+    .hero {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 24px;
+      padding: 28px;
+      border: 1px solid #293b59;
+      border-radius: 22px;
+      background: linear-gradient(125deg, #172641, #101827 70%);
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(25px, 4vw, 36px);
+      letter-spacing: -1px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .hero-badge {
+      padding: 10px 14px;
+      border: 1px solid #28553f;
+      border-radius: 12px;
+      background: #102b20;
+      color: #66edb2;
+      font-weight: 700;
+    }
+
+    .section-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 18px;
+    }
+
+    .section-title h2,
+    .panel h2,
+    .card h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -.3px;
+    }
+
+    .panel,
+    .card {
+      min-width: 0;
+      margin-bottom: 22px;
+      padding: clamp(16px, 2.5vw, 24px);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(16, 24, 39, .96);
+      box-shadow: 0 10px 35px rgba(0, 0, 0, .12);
+    }
+
+    .panel > h2,
+    .card > h2 {
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .panel .grid {
+      margin-bottom: 12px;
+    }
+
+    article {
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(145deg, #162236, #111a29);
+    }
+
+    article h3 {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    article > div,
+    article > strong {
+      overflow-wrap: anywhere;
+    }
+
+    #market-price {
+      font-size: clamp(20px, 3vw, 28px);
+      font-weight: 800;
+      letter-spacing: -.7px;
+    }
+
+    #market-symbol {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    #market-status,
+    #analysis-reason,
+    #backtest-status {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    #analysis-signal {
+      font-weight: 800;
+    }
+
+    hr {
+      height: 1px;
+      margin: 24px 0;
+      border: 0;
+      background: var(--border);
+    }
+
+    button {
+      min-height: 42px;
+      padding: 10px 15px;
+      border: 1px solid #35445c;
+      border-radius: 10px;
+      background: #1c2a40;
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    button.primary {
+      border-color: #2867d6;
+      background: #2563eb;
+      color: #fff;
+    }
+
+    button.danger {
+      border-color: #8c3041;
+      background: #591e2a;
+      color: #ffdce2;
+    }
+
+    button.success {
+      border-color: #18784f;
+      background: #124a34;
+      color: #a7f5d0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .section-description {
+      margin: -8px 0 18px;
+      color: var(--muted);
+    }
+
+    pre {
+      max-width: 100%;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: #b8c9e6;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      padding: 13px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #131f31;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    tbody tr:hover {
+      background: rgba(87, 148, 255, .06);
+    }
+
+    #backtest-panel {
+      width: 100%;
+    }
+
+    #backtest-form {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: end !important;
+      gap: 16px !important;
+      width: 100% !important;
+    }
+
+    #backtest-form label {
+      display: block !important;
+      width: 100% !important;
+      color: #bdc9dc;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    #backtest-form input,
+    #backtest-form select,
+    #backtest-form button {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: 48px !important;
+      margin-top: 7px !important;
+      padding: 11px 12px !important;
+      border: 1px solid #35445c !important;
+      border-radius: 10px !important;
+      background-color: #0b1321 !important;
+      color: var(--text) !important;
+      font-size: 15px !important;
+    }
+
+    #backtest-form button {
+      grid-column: 1 / -1;
+      border: 0 !important;
+      background: #2563eb !important;
+      font-weight: 800;
+    }
+
+    #backtest-status {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #0b1321;
+    }
+
+    #backtest-results {
+      width: 100%;
+    }
+
+    #backtest-results .bt-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 26px;
+    }
+
+    #backtest-results .bt-grid article {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #backtest-results .bt-grid article span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #backtest-results .bt-grid article strong {
+      font-size: 21px;
+      overflow-wrap: anywhere;
+    }
+
+    #backtest-results > div[style*="overflow-x"] {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    #backtest-results table {
+      min-width: 600px;
+    }
+
+    #backtest-results th,
+    #backtest-results td {
+      padding: 10px 8px;
+    }
+
+    #auth-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background:
+        radial-gradient(ellipse at top, #1a3157, transparent 55%),
+        #080d18;
+      color: #fff;
+    }
+
+    #auth-screen[hidden] {
+      display: none !important;
+    }
+
+    #auth-card {
+      width: 100%;
+      max-width: 420px;
+      padding: 28px;
+      border: 1px solid #293b59;
+      border-radius: 20px;
+      background: #111b2c;
+      box-shadow: 0 25px 80px #0008;
+    }
+
+    #auth-card h2 {
+      margin-top: 0;
+      font-size: 25px;
+    }
+
+    #auth-card input,
+    #auth-card button {
+      width: 100%;
+      min-height: 48px;
+      margin: 7px 0;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    #auth-card input {
+      border: 1px solid #394761;
+      background: #0b1020;
+      color: #fff;
+    }
+
+    #auth-card button {
+      border: 0;
+      background: #16865b;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    #auth-card #auth-toggle {
+      border: 1px solid #394761;
+      background: transparent;
+    }
+
+    #auth-message {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    #account-bar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+
+    #account-bar button {
+      width: auto;
+      min-height: 36px;
+      padding: 8px 12px;
+    }
+
+    #register-success[hidden] {
+      display: none !important;
+    }
+
+    #register-success:not([hidden]) {
+      display: flex !important;
+    }
+
+    footer {
+      padding: 18px 10px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      #backtest-results .bt-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      header {
+        min-height: 58px;
+        padding: 10px 14px;
+      }
+
+      header b {
+        font-size: 16px;
+      }
+
+      main {
+        padding: 16px 12px 32px;
+      }
+
+      .hero {
+        padding: 20px 16px;
+        border-radius: 16px;
+      }
+
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+      }
+
+      article {
+        padding: 13px;
+      }
+
+      .panel,
+      .card {
+        padding: 15px 12px;
+        border-radius: 14px;
+      }
+
+      .section-title h2,
+      .panel h2,
+      .card h2 {
+        font-size: 16px;
+      }
+
+      #backtest-form {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      #backtest-form button {
+        grid-column: auto;
+      }
+
+      #backtest-results .bt-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      #backtest-results .bt-grid article {
+        padding: 14px;
+      }
+
+      #account-bar {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<header><b>🤖 Trading AI</b><span id="mode">DEMO</span></header>
+<header>
+  <b>🤖 Trading AI Platform</b>
+  <span id="mode">DEMO</span>
+</header>
+
 <main>
-
-
-
-<section class="hero"><h1>Painel de Trading</h1><p>Estratégias, IA, risco e automação em um só lugar.</p></section>
-<section class="panel">
-<h2>📊 Mercado Bybit — Spot</h2>
-<div class="grid">
-  <article><h3>Ativo</h3><div id="market-symbol">BTCUSDT</div></article>
-  <article><h3>Último preço</h3><div id="market-price">Carregando...</div></article>
-  <article><h3>Compra / Venda</h3><div id="market-spread">Carregando...</div></article>
-  <article><h3>Variação 24h</h3><div id="market-change">Carregando...</div></article>
-</div>
-<p id="market-status">Consultando a Bybit...</p>
-
-<button onclick="loadMarket()">Atualizar cotação</button>
-<hr>
-<h2>🧠 Análise técnica — EMA e RSI</h2>
-<div class="grid">
-  <article><h3>Tendência</h3><div id="analysis-trend">Aguardando...</div></article>
-  <article><h3>EMA 9</h3><div id="analysis-ema9">Aguardando...</div></article>
-  <article><h3>EMA 21</h3><div id="analysis-ema21">Aguardando...</div></article>
-  <article><h3>RSI 14</h3><div id="analysis-rsi">Aguardando...</div></article>
-  <article style="grid-column:1/-1">
-  <h3>📊 Bandas de Bollinger</h3>
-  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
-    <div>🔺 Superior<br><strong id="analysis-bb-upper">Aguardando...</strong></div>
-    <div>➖ Central<br><strong id="analysis-bb-middle">Aguardando...</strong></div>
-    <div>🔻 Inferior<br><strong id="analysis-bb-lower">Aguardando...</strong></div>
-    <div>↔️ Largura<br><strong id="analysis-bb-width">Aguardando...</strong></div>
-  </div>
-</article>
-  <article><h3>Sinal</h3><div id="analysis-signal">Aguardando...</div></article>
-</div>
-<p id="analysis-reason">Aguardando análise...</p>
-<p><small>Somente análise técnica. Nenhuma ordem real será executada.</small></p>
-</section>
-<div class="grid">
-  <article><h3>💰 Status</h3><div id="stats">Carregando...</div></article>
-  <article><h3>🛡️ Risco</h3><div id="risk">Carregando...</div></article>
-  <article><h3>💳 Assinatura</h3><div id="subscription">Carregando...</div></article>
-  <article><h3>📈 Estratégias</h3><button onclick="loadStrategies()">Atualizar</button><pre id="strategies"></pre></article>
-</div>
-<section class="panel">
-<h2>📜 Histórico de sinais técnicos</h2>
-<button onclick="loadSignalHistory()">Atualizar histórico</button>
-<div style="overflow-x:auto">
-<table>
-<thead><tr>
-<th>Data</th><th>Ativo</th><th>Preço</th>
-<th>Tendência</th><th>RSI</th><th>Sinal</th>
-</tr></thead>
-<tbody id="signal-history">
-<tr><td colspan="6">Carregando histórico...</td></tr>
-</tbody>
-</table>
-</div>
-</section>
-<section class="panel">
-<h2>🧪 Simulação</h2>
-<button onclick="simulate()">Simular ordem DEMO</button>
-<pre id="result"></pre>
-</section>
-<section class="panel">
-<h2>🛡️ Emergência</h2>
-<button class="danger" onclick="killSwitch()">ATIVAR KILL SWITCH</button>
-</section>
-
-<section class="card" id="backtest-panel">
-  <h2>🧪 Backtest Histórico</h2>
-  <p>Teste uma estratégia com candles históricos da Bybit. Simulação sem dinheiro real.</p>
-  <form id="backtest-form" style="display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:16px!important;width:100%!important">
-    <label style="display:block!important;width:100%!important">
-      Ativo
-      <select id="bt-symbol" style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
-        <option value="BTCUSDT">BTCUSDT</option>
-        <option value="ETHUSDT">ETHUSDT</option>
-        <option value="SOLUSDT">SOLUSDT</option>
-        <option value="XRPUSDT">XRPUSDT</option>
-      </select>
-    </label>
-    <label style="display:block!important;width:100%!important">
-      Estratégia
-      <select id="bt-strategy" style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
-        <option value="combined">Combinada — Bollinger, RSI e EMA</option>
-        <option value="bollinger_rsi">Bollinger + RSI</option>
-        <option value="ema_cross">Cruzamento de EMA 9/21</option>
-      </select>
-    </label>
-    <label style="display:block!important;width:100%!important">
-      Intervalo
-      <select id="bt-timeframe" style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
-        <option value="1">1 minuto</option>
-        <option value="3">3 minutos</option>
-        <option value="5" selected>5 minutos</option>
-        <option value="15">15 minutos</option>
-        <option value="30">30 minutos</option>
-        <option value="60">1 hora</option>
-      </select>
-    </label>
-    <label style="display:block!important;width:100%!important">
-      Candles históricos
-      <select id="bt-limit" style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
-        <option value="50">50</option>
-        <option value="100" selected>100</option>
-        <option value="200">200</option>
-      </select>
-    </label>
-    <label style="display:block!important;width:100%!important">
-      Saldo inicial (USDT)
-      <input id="bt-balance" type="number" min="1" step="0.01" value="1000" required style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
-    </label>
-    <label style="display:block!important;width:100%!important">
-      Taxa por operação (%)
-      <input id="bt-fee" type="number" min="0" max="5" step="0.01" value="0.1" required style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
-    </label>
-    <button type="submit" id="bt-run" style="display:block!important;width:100%!important;min-height:50px!important;box-sizing:border-box!important">Executar Backtest</button>
-  </form>
-  <pre id="backtest-status" role="status">Configure os parâmetros e execute o teste.</pre>
-  <div id="backtest-results" hidden>
-    <div class="bt-grid">
-      <article><span>Saldo final</span><strong id="bt-final">—</strong></article>
-      <article><span>Resultado líquido</span><strong id="bt-net">—</strong></article>
-      <article><span>Retorno</span><strong id="bt-return">—</strong></article>
-      <article><span>Operações encerradas</span><strong id="bt-trades">—</strong></article>
-      <article><span>Taxa de acerto</span><strong id="bt-winrate">—</strong></article>
-      <article><span>Drawdown máximo</span><strong id="bt-drawdown">—</strong></article>
+  <section class="hero">
+    <div>
+      <h1>Painel de Trading</h1>
+      <p>Análise de mercado, estratégias, backtest e gestão de risco.</p>
     </div>
-    <h3>Operações do teste</h3>
+    <div class="hero-badge">● Ambiente de simulação</div>
+  </section>
+
+  <section class="panel" id="market-panel">
+    <div class="section-title">
+      <h2>📊 Mercado Bybit — Spot</h2>
+      <button type="button" onclick="loadMarket()">↻ Atualizar cotação</button>
+    </div>
+
+    <div class="grid">
+      <article>
+        <h3>Ativo</h3>
+        <div id="market-symbol">BTCUSDT</div>
+      </article>
+      <article>
+        <h3>Último preço</h3>
+        <div id="market-price">Carregando...</div>
+      </article>
+      <article>
+        <h3>Compra / Venda</h3>
+        <div id="market-spread">Carregando...</div>
+      </article>
+      <article>
+        <h3>Variação 24h</h3>
+        <div id="market-change">Carregando...</div>
+      </article>
+    </div>
+
+    <p id="market-status">Consultando a Bybit...</p>
+
+    <hr>
+
+    <div class="section-title">
+      <h2>🧠 Análise técnica</h2>
+      <span class="muted">EMA · RSI · Bollinger</span>
+    </div>
+
+    <div class="grid">
+      <article>
+        <h3>Tendência</h3>
+        <div id="analysis-trend">Aguardando...</div>
+      </article>
+      <article>
+        <h3>EMA 9</h3>
+        <div id="analysis-ema9">Aguardando...</div>
+      </article>
+      <article>
+        <h3>EMA 21</h3>
+        <div id="analysis-ema21">Aguardando...</div>
+      </article>
+      <article>
+        <h3>RSI 14</h3>
+        <div id="analysis-rsi">Aguardando...</div>
+      </article>
+
+      <article style="grid-column:1/-1">
+        <h3>Bandas de Bollinger</h3>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
+          <div>🔺 Superior<br><strong id="analysis-bb-upper">Aguardando...</strong></div>
+          <div>➖ Central<br><strong id="analysis-bb-middle">Aguardando...</strong></div>
+          <div>🔻 Inferior<br><strong id="analysis-bb-lower">Aguardando...</strong></div>
+          <div>↔️ Largura<br><strong id="analysis-bb-width">Aguardando...</strong></div>
+        </div>
+      </article>
+
+      <article>
+        <h3>Sinal técnico</h3>
+        <div id="analysis-signal">Aguardando...</div>
+      </article>
+    </div>
+
+    <p id="analysis-reason">Aguardando análise...</p>
+    <p class="muted"><small>Análise técnica não garante resultados futuros. Nenhuma ordem real será executada.</small></p>
+  </section>
+
+  <section>
+    <div class="section-title">
+      <h2>Visão geral da conta</h2>
+    </div>
+
+    <div class="grid">
+      <article>
+        <h3>💰 Status</h3>
+        <div id="stats">Carregando...</div>
+      </article>
+      <article>
+        <h3>🛡️ Gestão de risco</h3>
+        <div id="risk">Carregando...</div>
+      </article>
+      <article>
+        <h3>💳 Assinatura</h3>
+        <div id="subscription">Carregando...</div>
+      </article>
+      <article>
+        <h3>📈 Estratégias</h3>
+        <button type="button" onclick="loadStrategies()">Atualizar estratégias</button>
+        <pre id="strategies">Carregando...</pre>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <h2>📜 Histórico de sinais técnicos</h2>
+      <button type="button" onclick="loadSignalHistory()">Atualizar histórico</button>
+    </div>
+
+    <p class="section-description">Consulte os sinais técnicos registrados pelo sistema.</p>
+
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Entrada</th><th>Saída</th><th>Preço entrada</th><th>Preço saída</th><th>Resultado líquido</th><th>Resultado</th></tr></thead>
-        <tbody id="bt-trade-rows"><tr><td colspan="6">Sem operações.</td></tr></tbody>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Ativo</th>
+            <th>Preço</th>
+            <th>Tendência</th>
+            <th>RSI</th>
+            <th>Sinal</th>
+          </tr>
+        </thead>
+        <tbody id="signal-history">
+          <tr><td colspan="6">Carregando histórico...</td></tr>
+        </tbody>
       </table>
     </div>
-  </div>
-</section>
+  </section>
 
+  <section class="panel">
+    <h2>🧪 Simulação de operação</h2>
+    <p class="section-description">Teste o fluxo de simulação sem utilizar dinheiro real.</p>
+    <button class="primary" type="button" onclick="simulate()">Executar ordem DEMO</button>
+    <pre id="result">Nenhuma simulação executada.</pre>
+  </section>
+
+  <section class="panel">
+    <h2>🛡️ Proteção de emergência</h2>
+    <p class="section-description">Acione o kill switch para solicitar a interrupção das operações suportadas pelo backend.</p>
+    <button class="danger" type="button" onclick="killSwitch()">ATIVAR KILL SWITCH</button>
+  </section>
+
+  <section class="card" id="backtest-panel">
+    <h2>🧪 Backtest histórico</h2>
+    <p class="section-description">Avalie uma estratégia com candles históricos da Bybit. Os resultados são simulações e não representam garantia de lucro.</p>
+
+    <form id="backtest-form">
+      <label>
+        Ativo
+        <select id="bt-symbol">
+          <option value="BTCUSDT">BTCUSDT</option>
+          <option value="ETHUSDT">ETHUSDT</option>
+          <option value="SOLUSDT">SOLUSDT</option>
+          <option value="XRPUSDT">XRPUSDT</option>
+        </select>
+      </label>
+
+      <label>
+        Estratégia
+        <select id="bt-strategy">
+          <option value="combined">Combinada — Bollinger, RSI e EMA</option>
+          <option value="bollinger_rsi">Bollinger + RSI</option>
+          <option value="ema_cross">Cruzamento de EMA 9/21</option>
+        </select>
+      </label>
+
+      <label>
+        Intervalo
+        <select id="bt-timeframe">
+          <option value="1">1 minuto</option>
+          <option value="3">3 minutos</option>
+          <option value="5" selected>5 minutos</option>
+          <option value="15">15 minutos</option>
+          <option value="30">30 minutos</option>
+          <option value="60">1 hora</option>
+        </select>
+      </label>
+
+      <label>
+        Candles históricos
+        <select id="bt-limit">
+          <option value="50">50</option>
+          <option value="100" selected>100</option>
+          <option value="200">200</option>
+        </select>
+      </label>
+
+      <label>
+        Saldo inicial (USDT)
+        <input id="bt-balance" type="number" min="1" step="0.01" value="1000" required>
+      </label>
+
+      <label>
+        Taxa por operação (%)
+        <input id="bt-fee" type="number" min="0" max="5" step="0.01" value="0.1" required>
+      </label>
+
+      <button type="submit" id="bt-run">Executar backtest</button>
+    </form>
+
+    <pre id="backtest-status" role="status">Configure os parâmetros e execute o teste.</pre>
+
+    <div id="backtest-results" hidden>
+      <div class="bt-grid">
+        <article><span>Saldo final</span><strong id="bt-final">—</strong></article>
+        <article><span>Resultado líquido</span><strong id="bt-net">—</strong></article>
+        <article><span>Retorno</span><strong id="bt-return">—</strong></article>
+        <article><span>Operações encerradas</span><strong id="bt-trades">—</strong></article>
+        <article><span>Taxa de acerto</span><strong id="bt-winrate">—</strong></article>
+        <article><span>Drawdown máximo</span><strong id="bt-drawdown">—</strong></article>
+      </div>
+
+      <h3>Operações do teste</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Entrada</th>
+              <th>Saída</th>
+              <th>Preço entrada</th>
+              <th>Preço saída</th>
+              <th>Resultado líquido</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody id="bt-trade-rows">
+            <tr><td colspan="6">Sem operações.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Trading AI Platform · Mercado em análise · Modo DEMO/PAPER
+    <br>Trading envolve riscos. Resultados históricos não garantem resultados futuros.
+  </footer>
 </main>
-<script defer src="/app.js?v=20261012e"></script>
-
-<style>
-#auth-screen {
-  position:fixed; inset:0; z-index:99999;
-  display:flex; align-items:center; justify-content:center;
-  padding:20px; background:#0b1020; color:#fff;
-  font-family:Arial,sans-serif;
-}
-#auth-screen[hidden] { display:none!important; }
-#auth-card {
-  width:100%; max-width:420px; padding:25px;
-  background:#151d30; border:1px solid #293650;
-  border-radius:18px; box-sizing:border-box;
-}
-#auth-card h2 { margin-top:0; }
-#auth-card input,#auth-card button {
-  width:100%; min-height:48px; box-sizing:border-box;
-  margin:7px 0; padding:12px; border-radius:9px;
-  font-size:16px;
-}
-#auth-card input {
-  color:#fff; background:#0b1020; border:1px solid #394761;
-}
-#auth-card button {
-  color:#fff; background:#16865b; border:0; font-weight:bold;
-}
-#auth-toggle {
-  background:transparent!important; border:1px solid #394761!important;
-}
-#auth-message { white-space:pre-wrap; overflow-wrap:anywhere; }
-#account-bar {
-  display:flex; justify-content:flex-end; align-items:center;
-  gap:10px; padding:8px 12px; font-size:13px;
-}
-#account-bar button {
-  width:auto; padding:8px 12px; min-height:36px;
-}
-</style>
-
-<div id="register-success" hidden role="dialog" aria-modal="true"
-     aria-labelledby="register-success-title"
-     style="position:fixed;inset:0;background:rgba(0,0,0,.75);
-     z-index:99999;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#171c2b;color:#fff;padding:28px;border-radius:16px;
-       max-width:380px;width:100%;text-align:center;box-shadow:0 10px 40px #0008">
-    <div style="font-size:48px">✅</div>
-    <h2 id="register-success-title">Conta criada com sucesso!</h2>
-    <p>Sua conta está pronta. Clique abaixo para entrar.</p>
-    <button id="register-success-enter" type="button"
-      style="width:100%;padding:13px;border:0;border-radius:8px;
-      background:#22c55e;color:#fff;font-weight:bold;cursor:pointer">
-      Entrar na minha conta
-    </button>
-  </div>
-</div>
 
 <div id="auth-screen">
   <div id="auth-card">
     <h2>🤖 Trading AI Platform</h2>
     <p id="auth-subtitle">Entre para acessar sua conta.</p>
+
     <form id="auth-form">
-      <input id="auth-name" placeholder="Seu nome"
-             autocomplete="name" hidden>
-      <input id="auth-email" type="email" placeholder="E-mail"
-             autocomplete="email" required>
-      <input id="auth-password" type="password"
-             placeholder="Senha (mínimo 8 caracteres)"
-             autocomplete="current-password" minlength="8" required>
+      <input id="auth-name" placeholder="Seu nome" autocomplete="name" hidden>
+      <input id="auth-email" type="email" placeholder="E-mail" autocomplete="email" required>
+      <input id="auth-password" type="password" placeholder="Senha (mínimo 8 caracteres)" autocomplete="current-password" minlength="8" required>
       <button id="auth-submit" type="submit">Entrar</button>
     </form>
-    <button id="auth-toggle" type="button"
-            onclick="toggleAuthMode()">Criar uma conta</button>
+
+    <button id="auth-toggle" type="button" onclick="toggleAuthMode()">Criar uma conta</button>
     <p id="auth-message" role="status"></p>
   </div>
 </div>
+
+<div id="register-success" hidden role="dialog" aria-modal="true" aria-labelledby="register-success-title"
+  style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#171c2b;color:#fff;padding:28px;border-radius:16px;max-width:380px;width:100%;text-align:center;box-shadow:0 10px 40px #0008">
+    <div style="font-size:48px">✅</div>
+    <h2 id="register-success-title">Conta criada com sucesso!</h2>
+    <p>Sua conta está pronta. Clique abaixo para entrar.</p>
+    <button id="register-success-enter" type="button" style="width:100%;padding:13px;border:0;border-radius:8px;background:#22c55e;color:#fff;font-weight:bold">Entrar na minha conta</button>
+  </div>
+</div>
+
 <div id="account-bar" hidden>
   <span id="account-name"></span>
   <button type="button" onclick="logoutAccount()">Sair da conta</button>
 </div>
 
+<script defer src="/app.js?v=20261013a"></script>
 </body>
 </html>
