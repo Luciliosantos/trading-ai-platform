@@ -6,3 +6,420 @@ main{max-width:1200px;margin:auto;padding:28px}.hero{margin-bottom:24px}.hero h1
 article,.panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;margin-bottom:16px}
 button{border:0;border-radius:8px;padding:10px 14px;background:#238636;color:white;cursor:pointer}
 .danger{background:#da3633}pre{white-space:pre-wrap;color:#9cdcfe}
+
+/* Melhorias responsivas do painel e do backtest */
+#backtest-panel {
+    margin-top: 24px;
+    padding: 22px;
+    border: 1px solid #303846;
+    border-radius: 16px;
+    background: #151922;
+}
+
+#backtest-panel h2 {
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+#backtest-panel > p {
+    color: #aeb9ca;
+    line-height: 1.6;
+}
+
+#backtest-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 22px 0;
+}
+
+#backtest-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: #dce5f2;
+    font-size: 14px;
+}
+
+#backtest-form input,
+#backtest-form select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    color: #f5f7fb;
+    background: #0d1118;
+    border: 1px solid #394354;
+    border-radius: 9px;
+    font-size: 16px;
+}
+
+#backtest-form button {
+    grid-column: 1 / -1;
+    min-height: 48px;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 10px;
+    background: #218c54;
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#backtest-form button:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+#backtest-status {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #a9c9ed;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#backtest-results .bt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+}
+
+#backtest-results .bt-grid article {
+    min-width: 0;
+    padding: 16px;
+    background: #1c222d;
+    border: 1px solid #303846;
+    border-radius: 12px;
+}
+
+#backtest-results .bt-grid article span {
+    display: block;
+    margin-bottom: 10px;
+    color: #aeb9ca;
+    font-size: 13px;
+}
+
+#backtest-results .bt-grid article strong {
+    display: block;
+    color: #f5f7fb;
+    font-size: 19px;
+    overflow-wrap: anywhere;
+}
+
+#backtest-results table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+#backtest-results th,
+#backtest-results td {
+    padding: 12px 10px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid #303846;
+}
+
+#backtest-results th {
+    color: #aeb9ca;
+    background: #1c222d;
+}
+
+#backtest-results > div:last-child {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+    #backtest-panel {
+        padding: 16px;
+        margin-top: 18px;
+    }
+
+    #backtest-form {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    #backtest-form button {
+        grid-column: auto;
+        width: 100%;
+    }
+
+    #backtest-results .bt-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #backtest-results .bt-grid article {
+        padding: 14px;
+    }
+
+    #backtest-results .bt-grid article strong {
+        font-size: 18px;
+    }
+}
+
+/* Correção do formulário de backtest no celular */
+#backtest-panel {
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#backtest-form {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 16px !important;
+    width: 100%;
+}
+
+#backtest-form label {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 7px !important;
+    width: 100%;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+#backtest-form input,
+#backtest-form select {
+    display: block;
+    width: 100% !important;
+    max-width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+    margin: 0;
+    font-size: 16px;
+    border-radius: 9px;
+}
+
+#backtest-form button {
+    display: block;
+    width: 100% !important;
+    min-height: 50px;
+    margin-top: 4px;
+    box-sizing: border-box;
+}
+
+#backtest-status {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+#backtest-results {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+    #backtest-panel {
+        padding: 16px;
+    }
+
+    #backtest-form {
+        grid-template-columns: 1fr !important;
+    }
+
+    #backtest-results .bt-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    #backtest-results table {
+        min-width: 650px;
+    }
+}
+
+/* Corrige tabelas largas no celular */
+article,
+section,
+.card {
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#signal-history {
+    font-size: 13px;
+}
+
+#signal-history td,
+#signal-history th {
+    padding: 8px 6px;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    /* Histórico de sinais: rolagem horizontal dentro do cartão */
+    #signal-history {
+        font-size: 12px;
+    }
+
+    #signal-history td,
+    #signal-history th {
+        padding: 7px 5px;
+    }
+
+    /* Evita que as tabelas aumentem a largura da página */
+    article:has(#signal-history) {
+        overflow: hidden;
+    }
+
+    article:has(#signal-history) table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #backtest-panel {
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    #backtest-results > div:last-child {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Textos e títulos não devem alargar os cartões */
+    h1, h2, h3, p {
+        overflow-wrap: anywhere;
+    }
+}
+
+/* AJUSTE DEFINITIVO PARA TELAS PEQUENAS */
+#backtest-panel {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#backtest-form {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 14px !important;
+}
+
+#backtest-form label {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 6px !important;
+    line-height: 1.4;
+}
+
+#backtest-form input,
+#backtest-form select {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 48px;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    font-size: 16px !important;
+}
+
+#backtest-form button {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 50px;
+    box-sizing: border-box !important;
+    margin: 4px 0 0 !important;
+}
+
+#backtest-status {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+}
+
+/* Histórico de sinais com rolagem interna */
+article:has(#signal-history) {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+article:has(#signal-history) table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+#signal-history th,
+#signal-history td {
+    padding: 8px 10px;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+/* Tabela de operações do backtest */
+#backtest-results > div:last-child {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 600px) {
+    #backtest-panel {
+        padding: 16px;
+    }
+
+    #backtest-form {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    #backtest-results .bt-grid {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+/* Backtest: formulário vertical forçado */
+#backtest-panel #backtest-form {
+    display: block !important;
+    width: 100% !important;
+}
+
+#backtest-panel #backtest-form label {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 0 18px 0 !important;
+    font-size: 15px !important;
+}
+
+#backtest-panel #backtest-form label input,
+#backtest-panel #backtest-form label select {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 48px !important;
+    margin-top: 8px !important;
+    box-sizing: border-box !important;
+}
+
+#backtest-panel #backtest-form button {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 52px !important;
+    margin-top: 8px !important;
+    white-space: normal !important;
+    box-sizing: border-box !important;
+}

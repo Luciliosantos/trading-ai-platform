@@ -44,7 +44,7 @@ services:
     environment:
       POSTGRES_DB: trading
       POSTGRES_USER: trading
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-this-password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
