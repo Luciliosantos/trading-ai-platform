@@ -71,3 +71,46 @@ INSERT INTO plans(name,price_cents,features) VALUES
 ('Pro',0,'{"paper":true,"backtest":true,"telegram":true,"ai":true,"news":true}'),
 ('Advanced',0,'{"paper":true,"backtest":true,"telegram":true,"ai":true,"news":true,"copy":true,"arbitrage":true}')
 ON CONFLICT (name) DO NOTHING;
+
+
+CREATE TABLE IF NOT EXISTS user_credentials (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Autenticação de clientes
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
+    ON auth_sessions(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
+    ON auth_sessions(expires_at);
+
+-- Contas de corretoras cadastradas pelos clientes.
+-- As chaves serão armazenadas criptografadas na aplicação.
+CREATE TABLE IF NOT EXISTS exchange_accounts (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    exchange VARCHAR(40) NOT NULL,
+    label VARCHAR(100) NOT NULL,
+    api_key_encrypted TEXT NOT NULL,
+    api_secret_encrypted TEXT NOT NULL,
+    environment VARCHAR(20) NOT NULL DEFAULT 'demo',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_accounts_user
+    ON exchange_accounts(user_id);
+
+-- Estratégias pertencem ao cliente que as criou.
+CREATE INDEX IF NOT EXISTS idx_strategies_user
+    ON strategies(user_id);

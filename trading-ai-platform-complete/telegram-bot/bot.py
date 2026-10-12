@@ -1,66 +1,198 @@
-import os, httpx
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+import os
+import httpx
+import logging
 
-TOKEN=os.getenv("TELEGRAM_BOT_TOKEN")
-API=os.getenv("API_URL","http://api:8080")
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+)
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+API = os.getenv("API_URL", "http://api:8080")
+
 
 async def api(path, method="GET", payload=None):
-    async with httpx.AsyncClient(timeout=10) as c:
-        r=await c.request(method, API+path, json=payload)
-        return r.json()
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.request(
+            method, API + path, json=payload
+        )
+        response.raise_for_status()
+        return response.json()
 
-async def start(update:Update, context:ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 Trading AI Platform\n\n"
-        "Modo: PAPER 🧪\n\n"
-        "/painel\n/estrategias\n/nova\n/backtest\n/risco\n"
-        "/posicoes\n/assinatura\n/simular\n/stop"
+
+def menu():
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 Mercado", callback_data="mercado"),
+            InlineKeyboardButton("🧠 Estratégias", callback_data="estrategias"),
+        ],
+        [
+            InlineKeyboardButton("🧪 Backtest", callback_data="backtest"),
+            InlineKeyboardButton("🛡️ Gerenciar risco", callback_data="risco"),
+        ],
+        [
+            InlineKeyboardButton("📌 Posições", callback_data="posicoes"),
+            InlineKeyboardButton("💳 Assinatura", callback_data="assinatura"),
+        ],
+        [
+            InlineKeyboardButton("🌐 Abrir painel", url="http://191.252.113.230"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Atualizar menu", callback_data="menu"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def show_menu(update, context, edit=False):
+    text = (
+        "🤖 TRADING AI PLATFORM\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "🟢 Ambiente: DEMO\n"
+        "🔒 Ordens reais desativadas\n\n"
+        "Escolha uma opção abaixo:"
     )
 
-async def painel(update, context):
-    d=await api("/api/dashboard")
-    await update.message.reply_text(f"📊 Painel\nModo: {d['mode']}\nEstratégias: {d['stats']['strategies']}\nPosições: {d['stats']['active_positions']}")
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(
+            text, reply_markup=menu()
+        )
+    elif update.effective_message:
+        await update.effective_message.reply_text(
+            text, reply_markup=menu()
+        )
 
-async def estrategias(update, context):
-    data=await api("/api/strategies")
-    await update.message.reply_text(f"📈 Estratégias cadastradas: {len(data)}")
 
-async def nova(update, context):
-    await update.message.reply_text("Use o painel web para montar a estratégia. A API já aceita definição em JSON.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_menu(update, context)
 
-async def backtest(update, context):
-    await update.message.reply_text("🧪 Backtest disponível no painel. Resultados só devem ser usados após validação histórica e fora da amostra.")
 
-async def risco(update, context):
-    d=await api("/api/risk")
-    await update.message.reply_text(f"🛡️ Risco\nMáx. ordem: {d['max_order_value']}\nPerda diária: {d['max_daily_loss']}\nPosições: {d['max_open_positions']}")
+async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    action = query.data
 
-async def posicoes(update, context):
-    d=await api("/api/positions")
-    await update.message.reply_text(f"📌 Posições: {len(d.get('positions',[]))}")
+    if action == "menu":
+        await show_menu(update, context, edit=True)
+        return
 
-async def assinatura(update, context):
-    d=await api("/api/subscription")
-    await update.message.reply_text(f"💳 Plano: {d['plan']}\nStatus: {d['status']}")
+    try:
+        if action == "mercado":
+            data = await api("/api/market/ticker")
+            await query.edit_message_text(
+                "📊 MERCADO\n━━━━━━━━━━━━━━━━━━\n"
+                f"{data}",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("⬅️ Menu", callback_data="menu")
+                ]])
+            )
 
-async def simular(update, context):
-    order={"symbol":"BTCUSDT","side":"BUY","quantity":0.001,"price":50000}
-    d=await api("/api/simulate/order","POST",order)
-    await update.message.reply_text(f"🧪 {d}")
+        elif action == "estrategias":
+            data = await api("/api/strategies")
+            if isinstance(data, dict):
+                items = data.get("strategies", data.get("data", []))
+            else:
+                items = data
 
-async def stop(update, context):
-    d=await api("/api/kill-switch","POST",{})
-    await update.message.reply_text("🚨 KILL SWITCH ATIVADO: novas ordens estão bloqueadas.")
+            lines = ["🧠 ESTRATÉGIAS", "━━━━━━━━━━━━━━━━━━"]
+            for item in items[:15]:
+                if isinstance(item, dict):
+                    lines.append(
+                        f"• {item.get('name', 'Estratégia')} "
+                        f"({item.get('status', 'DEMO')})"
+                    )
+            if len(lines) == 2:
+                lines.append("Nenhuma estratégia cadastrada.")
+            text = "\n".join(lines)
+
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("⬅️ Menu", callback_data="menu")
+                ]])
+            )
+
+        elif action == "backtest":
+            await query.edit_message_text(
+                "🧪 BACKTEST HISTÓRICO\n\n"
+                "Execute os testes no painel web para selecionar "
+                "ativo, estratégia e período.\n\n"
+                "O resultado é uma simulação histórica, não garantia "
+                "de lucro.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "🌐 Abrir painel",
+                        url="http://191.252.113.230"
+                    )],
+                    [InlineKeyboardButton("⬅️ Menu", callback_data="menu")]
+                ])
+            )
+
+        elif action == "risco":
+            data = await api("/api/risk")
+            await query.edit_message_text(
+                "🛡️ GERENCIAMENTO DE RISCO\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"Máximo por ordem: {data.get('max_order_value', 'N/D')}\n"
+                f"Perda diária máxima: {data.get('max_daily_loss', 'N/D')}\n"
+                f"Máximo de posições: {data.get('max_open_positions', 'N/D')}",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("⬅️ Menu", callback_data="menu")
+                ]])
+            )
+
+        elif action == "posicoes":
+            data = await api("/api/positions")
+            positions = data.get("positions", [])
+            text = f"📌 POSIÇÕES\n━━━━━━━━━━━━━━━━━━\nTotal: {len(positions)}"
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("⬅️ Menu", callback_data="menu")
+                ]])
+            )
+
+        elif action == "assinatura":
+            data = await api("/api/subscription")
+            await query.edit_message_text(
+                "💳 ASSINATURA\n━━━━━━━━━━━━━━━━━━\n"
+                f"Plano: {data.get('plan', 'N/D')}\n"
+                f"Status: {data.get('status', 'N/D')}",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("⬅️ Menu", callback_data="menu")
+                ]])
+            )
+
+    except Exception as exc:
+        log.exception("Falha na ação %s", action)
+        await query.edit_message_text(
+            f"⚠️ Não consegui consultar essa função agora.\n"
+            f"Detalhe: {str(exc)[:250]}",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⬅️ Menu", callback_data="menu")
+            ]])
+        )
+
 
 def main():
-    if not TOKEN: raise RuntimeError("TELEGRAM_BOT_TOKEN não configurado")
-    app=Application.builder().token(TOKEN).build()
-    for cmd, fn in [
-        ("start",start),("painel",painel),("estrategias",estrategias),("nova",nova),
-        ("backtest",backtest),("risco",risco),("posicoes",posicoes),
-        ("assinatura",assinatura),("simular",simular),("stop",stop)
-    ]: app.add_handler(CommandHandler(cmd,fn))
+    if not TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN não configurado")
+
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(buttons))
     app.run_polling()
 
-if __name__=="__main__": main()
+
+if __name__ == "__main__":
+    main()

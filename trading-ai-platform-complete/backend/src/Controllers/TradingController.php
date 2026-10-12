@@ -17,24 +17,41 @@ class TradingController {
     }
 
     public static function positions(): void {
-        $db = Database::connection();
+        $userId = \App\Controllers\AuthController::authenticatedUserId();
 
-        $stmt = $db->query("
+        if ($userId === null) {
+            \jsonResponse([
+                'status' => 'error',
+                'message' => 'Faça login para continuar.'
+            ], 401);
+            return;
+        }
+
+        $db = \App\Database::connection();
+        $stmt = $db->prepare("
             SELECT id, connector, symbol, side, quantity, price,
                    status, external_id, created_at
             FROM orders
-            WHERE connector = 'paper'
+            WHERE user_id = :user_id
+              AND connector = 'paper'
             ORDER BY created_at DESC
             LIMIT 100
         ");
+        $stmt->execute(['user_id' => $userId]);
 
         \jsonResponse([
             'mode' => 'paper',
-            'positions' => $stmt->fetchAll(PDO::FETCH_ASSOC)
+            'positions' => $stmt->fetchAll(\PDO::FETCH_ASSOC)
         ]);
     }
 
     public static function simulate(): void {
+        $userId = \App\Controllers\AuthController::authenticatedUserId();
+        if ($userId === null) {
+            \jsonResponse(['status' => 'error', 'message' => 'Faça login para continuar.'], 401);
+            return;
+        }
+
         $data = \requestJson();
 
         $symbol = strtoupper(trim((string)($data['symbol'] ?? '')));
@@ -83,12 +100,13 @@ class TradingController {
                 (user_id, connector, symbol, side, quantity, price,
                  status, external_id, metadata)
             VALUES
-                (NULL, 'paper', :symbol, :side, :quantity, :price,
+                (:user_id, 'paper', :symbol, :side, :quantity, :price,
                  'simulated', :external_id, CAST(:metadata AS JSONB))
             RETURNING id
         ");
 
         $stmt->execute([
+            ':user_id' => $userId,
             ':symbol' => $symbol,
             ':side' => $side,
             ':quantity' => $data['quantity'],
@@ -214,6 +232,15 @@ class TradingController {
                 'status' => 'error',
                 'message' => 'Símbolo inválido.'
             ]);
+            return;
+        }
+
+        $userId = \App\Controllers\AuthController::authenticatedUserId();
+        if ($userId === null) {
+            \jsonResponse([
+                'status' => 'error',
+                'message' => 'Faça login para continuar.'
+            ], 401);
             return;
         }
 

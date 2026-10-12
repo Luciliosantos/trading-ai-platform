@@ -6,7 +6,7 @@ class ConnectorRegistry {
         return [
             'paper' => PaperConnector::class,
             'binance' => null,
-            'bybit' => \\App\\Connectors\\BybitPublicConnector::class,
+            'bybit' => BybitPublicConnector::class,
             'b3' => null,
             'iqoption' => null,
             'expertoption' => null,

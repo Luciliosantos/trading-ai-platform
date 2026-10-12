@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Trading AI Platform</title>
-<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/app.css?v=20261012b">
 
 <style id="backtest-mobile-fix">
 #backtest-panel { width:100%; box-sizing:border-box; }
@@ -71,11 +71,13 @@
   overflow-wrap:anywhere;
 }
 </style>
-
 </head>
 <body>
-<header><b>🤖 Trading AI</b><span id="mode">PAPER</span></header>
+<header><b>🤖 Trading AI</b><span id="mode">DEMO</span></header>
 <main>
+
+
+
 <section class="hero"><h1>Painel de Trading</h1><p>Estratégias, IA, risco e automação em um só lugar.</p></section>
 <section class="panel">
 <h2>📊 Mercado Bybit — Spot</h2>
@@ -132,7 +134,7 @@
 </section>
 <section class="panel">
 <h2>🧪 Simulação</h2>
-<button onclick="simulate()">Simular ordem PAPER</button>
+<button onclick="simulate()">Simular ordem DEMO</button>
 <pre id="result"></pre>
 </section>
 <section class="panel">
@@ -151,6 +153,14 @@
         <option value="ETHUSDT">ETHUSDT</option>
         <option value="SOLUSDT">SOLUSDT</option>
         <option value="XRPUSDT">XRPUSDT</option>
+      </select>
+    </label>
+    <label style="display:block!important;width:100%!important">
+      Estratégia
+      <select id="bt-strategy" style="display:block!important;width:100%!important;min-height:48px!important;box-sizing:border-box!important">
+        <option value="combined">Combinada — Bollinger, RSI e EMA</option>
+        <option value="bollinger_rsi">Bollinger + RSI</option>
+        <option value="ema_cross">Cruzamento de EMA 9/21</option>
       </select>
     </label>
     <label style="display:block!important;width:100%!important">
@@ -203,6 +213,86 @@
 </section>
 
 </main>
-<script src="/app.js"></script>
+<script defer src="/app.js?v=20261012e"></script>
+
+<style>
+#auth-screen {
+  position:fixed; inset:0; z-index:99999;
+  display:flex; align-items:center; justify-content:center;
+  padding:20px; background:#0b1020; color:#fff;
+  font-family:Arial,sans-serif;
+}
+#auth-screen[hidden] { display:none!important; }
+#auth-card {
+  width:100%; max-width:420px; padding:25px;
+  background:#151d30; border:1px solid #293650;
+  border-radius:18px; box-sizing:border-box;
+}
+#auth-card h2 { margin-top:0; }
+#auth-card input,#auth-card button {
+  width:100%; min-height:48px; box-sizing:border-box;
+  margin:7px 0; padding:12px; border-radius:9px;
+  font-size:16px;
+}
+#auth-card input {
+  color:#fff; background:#0b1020; border:1px solid #394761;
+}
+#auth-card button {
+  color:#fff; background:#16865b; border:0; font-weight:bold;
+}
+#auth-toggle {
+  background:transparent!important; border:1px solid #394761!important;
+}
+#auth-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+#account-bar {
+  display:flex; justify-content:flex-end; align-items:center;
+  gap:10px; padding:8px 12px; font-size:13px;
+}
+#account-bar button {
+  width:auto; padding:8px 12px; min-height:36px;
+}
+</style>
+
+<div id="register-success" hidden role="dialog" aria-modal="true"
+     aria-labelledby="register-success-title"
+     style="position:fixed;inset:0;background:rgba(0,0,0,.75);
+     z-index:99999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#171c2b;color:#fff;padding:28px;border-radius:16px;
+       max-width:380px;width:100%;text-align:center;box-shadow:0 10px 40px #0008">
+    <div style="font-size:48px">✅</div>
+    <h2 id="register-success-title">Conta criada com sucesso!</h2>
+    <p>Sua conta está pronta. Clique abaixo para entrar.</p>
+    <button id="register-success-enter" type="button"
+      style="width:100%;padding:13px;border:0;border-radius:8px;
+      background:#22c55e;color:#fff;font-weight:bold;cursor:pointer">
+      Entrar na minha conta
+    </button>
+  </div>
+</div>
+
+<div id="auth-screen">
+  <div id="auth-card">
+    <h2>🤖 Trading AI Platform</h2>
+    <p id="auth-subtitle">Entre para acessar sua conta.</p>
+    <form id="auth-form">
+      <input id="auth-name" placeholder="Seu nome"
+             autocomplete="name" hidden>
+      <input id="auth-email" type="email" placeholder="E-mail"
+             autocomplete="email" required>
+      <input id="auth-password" type="password"
+             placeholder="Senha (mínimo 8 caracteres)"
+             autocomplete="current-password" minlength="8" required>
+      <button id="auth-submit" type="submit">Entrar</button>
+    </form>
+    <button id="auth-toggle" type="button"
+            onclick="toggleAuthMode()">Criar uma conta</button>
+    <p id="auth-message" role="status"></p>
+  </div>
+</div>
+<div id="account-bar" hidden>
+  <span id="account-name"></span>
+  <button type="button" onclick="logoutAccount()">Sair da conta</button>
+</div>
+
 </body>
 </html>

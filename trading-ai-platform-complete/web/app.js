@@ -1,7 +1,15 @@
-async function get(path, opts={}){const r=await fetch(path,opts);return r.json()}
+async function get(path, opts={}) {
+ const headers = {...(opts.headers || {})};
+ const token = localStorage.getItem('trading_auth_token');
+ if (token) headers.Authorization = 'Bearer ' + token;
+ const r = await fetch(path, {...opts, headers});
+ const data = await r.json();
+ if (!r.ok) throw new Error(data.error || data.message || 'Erro HTTP ' + r.status);
+ return data;
+}
 async function load(){
  const d=await get('/api/dashboard'); document.getElementById('mode').textContent=d.mode.toUpperCase();
- document.getElementById('stats').textContent=`Estratégias: ${d.stats.strategies}\nPosições: ${d.stats.active_positions}\nP&L paper: ${d.stats.paper_pnl}`;
+ document.getElementById('stats').textContent=`Estratégias: ${d.stats.strategies}\nPosições: ${d.stats.active_positions}\nResultado da simulação: ${d.stats.paper_pnl}`;
  const risk=await get('/api/risk'); document.getElementById('risk').textContent=`Máx. ordem: ${risk.max_order_value}\nPerda diária: ${risk.max_daily_loss}\nPosições: ${risk.max_open_positions}`;
  const s=await get('/api/subscription'); document.getElementById('subscription').textContent=`Plano: ${s.plan}\nStatus: ${s.status}`;
  loadStrategies();
@@ -31,7 +39,7 @@ async function simulate(){
 
     el.textContent =
       'SIMULAÇÃO CONCLUÍDA\n\n' +
-      'Modo: PAPER (sem dinheiro real)\n' +
+      'Modo: DEMO (sem dinheiro real)\n' +
       'Ativo: ' + r.order.symbol + '\n' +
       'Operação: ' + r.order.side + '\n' +
       'Quantidade: ' + r.order.quantity + '\n' +
@@ -43,7 +51,26 @@ async function simulate(){
   }
 }
 async function killSwitch(){const d=await get('/api/kill-switch',{method:'POST'});document.getElementById('result').textContent=JSON.stringify(d,null,2)}
-load();
+
+// Mantém a sessão autenticada nas chamadas à API.
+(() => {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input.url;
+    if (url.startsWith('/api/') && !url.startsWith('/api/auth/login')
+        && !url.startsWith('/api/auth/register')) {
+      const headers = new Headers(
+        init.headers || (input instanceof Request ? input.headers : undefined)
+      );
+      const token = localStorage.getItem('trading_auth_token');
+      if (token) headers.set('Authorization', 'Bearer ' + token);
+      init = {...init, headers};
+    }
+    return originalFetch(input, init);
+  };
+})();
+
+initAuth();
 
 async function loadMarket() {
   const status = document.getElementById('market-status');
@@ -203,6 +230,7 @@ async function runBacktest() {
       body: JSON.stringify({
         symbol: document.getElementById('bt-symbol').value,
         timeframe: document.getElementById('bt-timeframe').value,
+        strategy: document.getElementById('bt-strategy').value,
         limit: Number(document.getElementById('bt-limit').value),
         initial_balance: balance,
         fee_rate: feePercent / 100
@@ -259,3 +287,133 @@ document.addEventListener('DOMContentLoaded', () => {
     runBacktest();
   });
 });
+
+
+let authMode = 'login';
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  document.getElementById('auth-name').hidden = authMode !== 'register';
+  document.getElementById('auth-name').required = authMode === 'register';
+  document.getElementById('auth-password').autocomplete =
+    authMode === 'login' ? 'current-password' : 'new-password';
+  document.getElementById('auth-subtitle').textContent =
+    authMode === 'login' ? 'Entre para acessar sua conta.' :
+    'Crie sua conta para começar.';
+  document.getElementById('auth-submit').textContent =
+    authMode === 'login' ? 'Entrar' : 'Criar conta';
+  document.getElementById('auth-toggle').textContent =
+    authMode === 'login' ? 'Ainda não tenho conta' : 'Já tenho conta';
+  document.getElementById('auth-message').textContent = '';
+}
+
+async function initAuth() {
+  const token = localStorage.getItem('trading_auth_token');
+  if (token) {
+    try {
+      const data = await get('/api/auth/me');
+      if (data.status === 'ok' && data.user) {
+        showAuthenticatedUser(data.user);
+        load();
+        return;
+      }
+    } catch (e) {
+      localStorage.removeItem('trading_auth_token');
+    }
+  }
+  document.getElementById('auth-screen').hidden = false;
+  document.getElementById('account-bar').hidden = true;
+}
+
+function showAuthenticatedUser(user) {
+  document.getElementById('auth-screen').hidden = true;
+  document.getElementById('account-bar').hidden = false;
+  document.getElementById('account-name').textContent =
+    'Conta: ' + (user.name || user.email || 'Cliente');
+}
+
+document.getElementById('auth-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const message = document.getElementById('auth-message');
+  const button = document.getElementById('auth-submit');
+  button.disabled = true;
+  message.textContent = 'Processando...';
+
+  try {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    let data;
+
+    if (authMode === 'register') {
+      const name = document.getElementById('auth-name').value.trim();
+      data = await get('/api/auth/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name, email, password})
+      });
+
+      if (data.status !== 'ok') {
+        throw new Error(data.error || 'Não foi possível criar a conta.');
+      }
+
+      document.getElementById('auth-screen').hidden = true;
+      document.getElementById('register-success').hidden = false;
+      document.getElementById('register-success').style.display = 'flex';
+      message.textContent = '';
+      document.getElementById('auth-email').value = email;
+      document.getElementById('register-success-enter').onclick = function() {
+        const modal = document.getElementById('register-success');
+        modal.hidden = true;
+        modal.style.display = 'none';
+
+        const screen = document.getElementById('auth-screen');
+        screen.hidden = false;
+        screen.style.display = 'block';
+
+        authMode = 'login';
+        document.getElementById('auth-subtitle').textContent =
+          'Entre para acessar sua conta.';
+        document.getElementById('auth-name').hidden = true;
+        document.getElementById('auth-name').required = false;
+        document.getElementById('auth-password').autocomplete = 'current-password';
+        document.getElementById('auth-submit').textContent = 'Entrar';
+        document.getElementById('auth-toggle').hidden = false;
+        document.getElementById('auth-toggle').textContent = 'Criar uma conta';
+        document.getElementById('auth-email').value = email;
+        document.getElementById('auth-password').value = '';
+        document.getElementById('auth-message').textContent =
+          'Conta criada! Digite sua senha para entrar.';
+      };
+      return;
+    }
+
+    data = await get('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password})
+    });
+
+    if (data.status !== 'ok' || !data.token) {
+      throw new Error(data.error || 'Login não concluído.');
+    }
+
+    localStorage.setItem('trading_auth_token', data.token);
+    showAuthenticatedUser(data.user || {});
+    load();
+  } catch (err) {
+    message.textContent = err.message || 'Não foi possível concluir a operação.';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function logoutAccount() {
+  try {
+    await get('/api/auth/logout', {method: 'POST'});
+  } catch (e) {}
+  localStorage.removeItem('trading_auth_token');
+  document.getElementById('account-bar').hidden = true;
+  document.getElementById('auth-screen').hidden = false;
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-message').textContent = 'Sessão encerrada.';
+}
